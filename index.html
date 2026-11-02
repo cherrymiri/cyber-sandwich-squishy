@@ -1,0 +1,850 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FFF9F0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>사이버 샌드위치 말랑이</title>
+<meta name="description" content="손, 마우스, 터치로 3D 샌드위치를 꾹꾹 주무르는 말랑이 웹 장난감">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<style>
+/* layout: full-bleed 3D stage, floating soft controls at the safe-area edges */
+:root{
+  --bg:#FFF9F0; --ink:#5B4636; --ink-soft:#9C8573; --chip:#FFFFFF; --chip-line:#F1E2CF;
+  --accent:#FF8A7A; --accent-ink:#FFFFFF; --mint:#8EDBB7; --butter:#FFD36E;
+  --display:"Jua","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --body:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
+  color-scheme:light;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+[hidden]{display:none!important}
+#stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+.top{position:fixed;top:calc(var(--sat) + 14px);left:calc(var(--sal) + 16px);display:flex;flex-direction:column;gap:8px;pointer-events:none;z-index:5}
+.title{font-family:var(--display);font-size:clamp(18px,2.4vw,24px);letter-spacing:.01em;line-height:1.1}
+.title small{display:block;font-family:var(--body);font-size:12px;color:var(--ink-soft);margin-top:4px;letter-spacing:.02em}
+.meter{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.meter .bar{width:96px;height:8px;border-radius:99px;background:#F3E6D6;overflow:hidden}
+.meter .fill{height:100%;width:0%;border-radius:99px;background:linear-gradient(90deg,var(--butter),var(--accent),#C9A2FF,var(--mint));background-size:96px 100%;transition:width .3s}
+.hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--sab) + 92px);background:rgba(255,255,255,.82);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--chip-line);color:var(--ink);padding:10px 16px;border-radius:99px;font-size:13px;white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis;transition:opacity .6s;pointer-events:none;z-index:4}
+.hint.fade{opacity:0}
+.dock{position:fixed;right:calc(var(--sar) + 16px);bottom:calc(var(--sab) + 18px);display:flex;gap:10px;z-index:6}
+.btn{font-family:var(--display);font-size:16px;min-height:52px;padding:0 20px;border-radius:99px;border:1px solid var(--chip-line);background:var(--chip);color:var(--ink);box-shadow:0 6px 18px rgba(150,110,70,.13);cursor:pointer;display:inline-flex;align-items:center;gap:8px;touch-action:manipulation}
+.btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.btn:active{transform:scale(.96)}
+.btn .dot{width:10px;height:10px;border-radius:50%;background:#D9C7B3}
+.btn.on .dot{background:#38C98A;box-shadow:0 0 0 4px rgba(56,201,138,.2)}
+#resetBtn{position:fixed;left:50%;bottom:calc(var(--sab) + 18px);transform:translateX(-50%);background:var(--accent);color:var(--accent-ink);border-color:transparent;font-size:19px;min-height:58px;padding:0 30px;z-index:7;animation:pop .5s cubic-bezier(.3,1.6,.5,1)}
+@keyframes pop{from{transform:translateX(-50%) scale(.4);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
+.cam{position:fixed;top:calc(var(--sat) + 14px);right:calc(var(--sar) + 16px);width:168px;z-index:6;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.cam .screen{position:relative;width:168px;aspect-ratio:4/3;border-radius:22px;overflow:hidden;background:#F3E6D6;border:3px solid #fff;box-shadow:0 8px 22px rgba(150,110,70,.18);transition:opacity .25s}
+.cam video,.cam canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.cam .tag{position:absolute;left:8px;bottom:6px;font-size:11px;color:#fff;background:rgba(91,70,54,.45);padding:2px 8px;border-radius:99px;transform:none}
+.cam.collapsed .screen{position:fixed;width:2px;height:2px;opacity:.01;pointer-events:none;top:0;right:0;border:0;box-shadow:none}
+.mini{font-family:var(--display);font-size:13px;min-height:36px;padding:0 14px;border-radius:99px;border:1px solid var(--chip-line);background:var(--chip);color:var(--ink);cursor:pointer;touch-action:manipulation}
+.cursor{position:fixed;left:0;top:0;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:3px solid rgba(255,255,255,.95);background:rgba(255,138,122,.35);box-shadow:0 2px 10px rgba(150,110,70,.25);pointer-events:none;z-index:8;transition:width .12s,height .12s,margin .12s,background .12s}
+.cursor.pinch{width:22px;height:22px;margin:-11px 0 0 -11px;background:rgba(255,138,122,.9)}
+.cursor.poke{background:rgba(142,219,183,.85)}
+.toast{position:fixed;left:50%;top:calc(var(--sat) + 76px);transform:translateX(-50%);background:var(--ink);color:#fff;font-size:13px;padding:10px 16px;border-radius:14px;max-width:min(92vw,420px);text-align:center;line-height:1.45;z-index:9;transition:opacity .4s}
+.loading{position:fixed;inset:0;display:grid;place-items:center;font-family:var(--display);font-size:18px;color:var(--ink-soft);z-index:10;pointer-events:none;transition:opacity .5s}
+@media (max-width:600px){
+  .cam,.cam .screen{width:112px}
+  .cam .screen{border-radius:18px}
+  .top{top:calc(var(--sat) + 12px)}
+  .hint{bottom:calc(var(--sab) + 88px);font-size:12px}
+}
+@media (max-height:480px) and (orientation:landscape){
+  .cam,.cam .screen{width:120px}
+  .hint{bottom:calc(var(--sab) + 80px)}
+  .title small{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="stage" tabindex="0" aria-label="3D 샌드위치 말랑이 조작 영역"></canvas>
+
+<div class="top">
+  <div class="title">사이버 샌드위치 말랑이<small id="sub">꾹 누르고 쭈욱 늘려 보세요</small></div>
+  <div class="meter" aria-live="polite"><div class="bar"><div class="fill" id="mixFill"></div></div><span id="mixTxt">섞임 0%</span></div>
+</div>
+
+<div class="cam collapsed" id="cam" hidden>
+  <div class="screen" id="camScreen">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas id="lm"></canvas>
+    <span class="tag" id="camTag">손을 보여 주세요</span>
+  </div>
+  <button class="mini" id="camToggle" type="button">미리보기 숨기기</button>
+</div>
+
+<div class="hint" id="hint"></div>
+<div class="dock"><button class="btn" id="handBtn" type="button"><span class="dot"></span><span id="handLbl">손 인식</span></button></div>
+<button class="btn" id="resetBtn" type="button" hidden>다시 만지기</button>
+<div class="cursor" id="cur0" hidden></div>
+<div class="cursor" id="cur1" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<div class="loading" id="loading">말랑이 꺼내는 중…</div>
+
+<script type="importmap">
+{"imports":{
+  "three":"./vendor/three/three.module.js",
+  "three/addons/":"./vendor/three/addons/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const $ = id => document.getElementById(id);
+const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+const isMobile = isTouch && Math.min(screen.width, screen.height) < 900;
+
+/* ---------- renderer / scene ---------- */
+const canvas = $('stage');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile, alpha: false, powerPreference: 'high-performance' });
+let pixelRatio = Math.min(devicePixelRatio || 1, isMobile ? 1.75 : 2);
+renderer.setPixelRatio(pixelRatio);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NoToneMapping;
+const BG = new THREE.Color('#FFF9F0');
+renderer.setClearColor(BG, 1);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+scene.add(new THREE.HemisphereLight(0xfff6ea, 0xe8c9ad, 0.35));
+const key = new THREE.DirectionalLight(0xffffff, 1.25); key.position.set(2, 4, 3); scene.add(key);
+const rim = new THREE.DirectionalLight(0xffe2d0, 0.5); rim.position.set(-3, 1.5, -2); scene.add(rim);
+
+const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
+const root = new THREE.Group(); scene.add(root);
+root.rotation.set(0.42, -0.5, 0);
+
+// soft contact shadow
+const shadowTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 4, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(140,95,60,0.38)'); gr.addColorStop(0.55, 'rgba(140,95,60,0.14)'); gr.addColorStop(1, 'rgba(140,95,60,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, toneMapped: false }));
+shadow.rotation.x = -Math.PI / 2; shadow.scale.set(3.2, 2.4, 1); shadow.position.y = -0.82; scene.add(shadow);
+
+const clayMat = new THREE.MeshPhysicalMaterial({
+  vertexColors: true, roughness: 0.42, metalness: 0, sheen: 0.35, sheenRoughness: 0.6, sheenColor: new THREE.Color(0xffe9d6),
+  clearcoat: isMobile ? 0 : 0.3, clearcoatRoughness: 0.35, envMapIntensity: 0.45
+});
+
+/* ---------- global vertex buffers ---------- */
+let N = 0, P, V, R0, Q, C, C0, T, PART, LAYER;
+const meshes = [];
+let partCount = 0;
+
+function onResize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const fitW = (isMobile ? 1.1 : 1.45) / (half * camera.aspect);
+  const fitH = 1.15 / half;
+  const d = Math.max(fitW, fitH);
+  camera.position.set(0, d * 0.16, d);
+  camera.lookAt(0, -0.05, 0);
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', onResize); onResize();
+
+/* ---------- load model ---------- */
+new GLTFLoader().load('sandwich.glb', gltf => {
+  gltf.scene.updateMatrixWorld(true);
+  const parts = [];
+  const tmpC = new THREE.Color();
+  gltf.scene.traverse(o => {
+    if (!o.isMesh || !o.visible) return;
+    const g = o.geometry.clone();
+    g.applyMatrix4(o.matrixWorld);
+    g.morphAttributes = {};
+    const n = g.attributes.position.count;
+    const base = o.material && o.material.color ? o.material.color : new THREE.Color(1, 1, 1);
+    const col = new Float32Array(n * 3);
+    const vc = g.attributes.color;
+    for (let i = 0; i < n; i++) {
+      tmpC.copy(base);
+      if (vc) tmpC.multiply(new THREE.Color(vc.getX(i), vc.getY(i), vc.getZ(i)));
+      col[i * 3] = tmpC.r; col[i * 3 + 1] = tmpC.g; col[i * 3 + 2] = tmpC.b;
+    }
+    let p = o; while (p.parent && p.parent !== gltf.scene) p = p.parent;
+    parts.push({ g, col, n, group: p.name || o.name });
+  });
+  // normalize to a common frame
+  const box = new THREE.Box3();
+  parts.forEach(p => { p.g.computeBoundingBox(); box.union(p.g.boundingBox); });
+  const ctr = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+  const s = 2.0 / Math.max(size.x, size.z);
+  N = parts.reduce((a, p) => a + p.n, 0);
+  P = new Float32Array(N * 3); V = new Float32Array(N * 3); R0 = new Float32Array(N * 3); Q = new Float32Array(N * 3);
+  C = new Float32Array(N * 3); C0 = new Float32Array(N * 3); T = new Float32Array(N); PART = new Uint8Array(N); LAYER = new Float32Array(N);
+  const groups = [...new Set(parts.map(p => p.group))];
+  partCount = groups.length;
+  let off = 0;
+  parts.forEach(p => {
+    const pos = p.g.attributes.position, gi = groups.indexOf(p.group);
+    const isBread = /BREAD/.test(p.group);
+    for (let i = 0; i < p.n; i++) {
+      const k = (off + i) * 3;
+      P[k] = (pos.getX(i) - ctr.x) * s; P[k + 1] = (pos.getY(i) - ctr.y) * s; P[k + 2] = (pos.getZ(i) - ctr.z) * s;
+      C[k] = p.col[i * 3]; C[k + 1] = p.col[i * 3 + 1]; C[k + 2] = p.col[i * 3 + 2];
+      PART[off + i] = gi; LAYER[off + i] = isBread ? 1.0 : 0.95;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(P.subarray(off * 3, (off + p.n) * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('color', new THREE.BufferAttribute(C.subarray(off * 3, (off + p.n) * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    if (p.g.index) g.setIndex(p.g.index.clone());
+    g.computeVertexNormals();
+    g.attributes.normal.setUsage(THREE.DynamicDrawUsage);
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4);
+    const m = new THREE.Mesh(g, clayMat);
+    m.userData.off = off; m.userData.n = p.n; m.frustumCulled = false;
+    root.add(m); meshes.push(m);
+    off += p.n;
+  });
+  R0.set(P); Q.set(P); C0.set(C);
+  // vivid palette of the original ingredients (for final marbling)
+  buildPalette(groups);
+  const minY = (box.min.y - ctr.y) * s;
+  shadow.position.y = minY - 0.12;
+  $('loading').style.opacity = 0; setTimeout(() => $('loading').remove(), 600);
+  showHint();
+}, undefined, err => { $('loading').textContent = '모델을 불러오지 못했어요. 새로고침해 주세요.'; console.error(err); });
+
+/* ---------- color helpers ---------- */
+let PALETTE = [];
+function buildPalette(groups) {
+  const sums = groups.map(() => [0, 0, 0, 0]);
+  for (let i = 0; i < N; i++) { const s = sums[PART[i]]; s[0] += C[i * 3]; s[1] += C[i * 3 + 1]; s[2] += C[i * 3 + 2]; s[3]++; }
+  const cols = sums.map(s => [s[0] / s[3], s[1] / s[3], s[2] / s[3]]);
+  // order by hue so neighbouring bands blend cleanly (no muddy complements)
+  const hue = c => { const h = new THREE.Color(c[0], c[1], c[2]).getHSL({}).h; return (h + 0.75) % 1; };
+  PALETTE = cols.map(c => vivid(c.slice(), 0.42)).sort((a, b) => hue(a) - hue(b));
+}
+const _hsl = {}, _col = new THREE.Color();
+function vivid(c, minS) {
+  _col.setRGB(c[0], c[1], c[2]).getHSL(_hsl);
+  const s = Math.max(_hsl.s, minS), l = Math.min(Math.max(_hsl.l, 0.32), 0.78);
+  _col.setHSL(_hsl.h, s, l); c[0] = _col.r; c[1] = _col.g; c[2] = _col.b; return c;
+}
+const _v3 = [0, 0, 0];
+function keepPretty(i) {
+  const k = i * 3; _v3[0] = C[k]; _v3[1] = C[k + 1]; _v3[2] = C[k + 2];
+  vivid(_v3, 0.36); C[k] = _v3[0]; C[k + 1] = _v3[1]; C[k + 2] = _v3[2];
+}
+function marbleAt(x, y, z, seed) {
+  const f = Math.sin(x * 3.1 + Math.sin(y * 5.3 + z * 2.1 + seed) * 1.8 + z * 1.7) * 0.5 + 0.5;
+  const g = Math.sin(z * 4.3 + Math.sin(x * 3.7 - seed) * 1.4 + y * 2.3) * 0.5 + 0.5;
+  const t = ((f * 0.65 + g * 0.35) * (PALETTE.length - 1));
+  const a = Math.floor(t), b = Math.min(a + 1, PALETTE.length - 1), u = t - a;
+  const s = u * u * (3 - 2 * u), A = PALETTE[a], B = PALETTE[b];
+  return [A[0] + (B[0] - A[0]) * s, A[1] + (B[1] - A[1]) * s, A[2] + (B[2] - A[2]) * s];
+}
+// rounded single-lump shape the clay drifts toward as it is kneaded
+const BLOB = [0.86, 0.6, 0.8];
+function blobTarget(i, out) {
+  const k = i * 3; const x = Q[k] / BLOB[0], y = (Q[k + 1] + 0.02) / BLOB[1], z = Q[k + 2] / BLOB[2];
+  const l = Math.hypot(x, y, z) || 1, r = LAYER[i];
+  out[0] = x / l * BLOB[0] * r; out[1] = y / l * BLOB[1] * r - 0.02; out[2] = z / l * BLOB[2] * r;
+  return out;
+}
+
+/* ---------- interaction state ---------- */
+let mix = 0, mixed = false, finale = null, restoring = 0, touchedOnce = false;
+const RP = 0.6, RD = 0.32, RC = 0.3;      // pull radius, dent radius, color radius
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+const rootInv = new THREE.Matrix4();
+const camDir = new THREE.Vector3();
+const contacts = new Map();
+let squeeze = null;
+
+function setRay(x, y) {
+  ndc.set(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+}
+function hitModel(x, y) {
+  if (!N) return null;
+  setRay(x, y);
+  const h = raycaster.intersectObjects(meshes, false);
+  return h.length ? h[0] : null;
+}
+function toLocal(v) { return v.clone().applyMatrix4(rootInv); }
+
+function beginContact(id, x, y, kind) {
+  const hit = hitModel(x, y);
+  if (!hit) return null;
+  camera.getWorldDirection(camDir);
+  const hitL = toLocal(hit.point);
+  const dirL = raycaster.ray.direction.clone().transformDirection(rootInv);
+  const c = {
+    id, kind, x, y, hitL, dirL, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, hit.point),
+    delta: new THREE.Vector3(), depth: 0, paint: [0, 0, 0], paintT: 0, phase: Math.random() * 6.28,
+    stripe: new THREE.Vector3(Math.random() - .5, Math.random() - .5, Math.random() - .5).normalize(), hitPart: PART[(meshes.indexOf(hit.object) >= 0 ? hit.object.userData.off : 0) + (hit.face ? hit.face.a : 0)]
+  };
+  capture(c);
+  pickPaint(c);
+  contacts.set(id, c);
+  touchedOnce = true; fadeHint();
+  return c;
+}
+function capture(c) {
+  const idx = [], anc = [], rr = [], rp = [];
+  const hx = c.hitL.x, hy = c.hitL.y, hz = c.hitL.z, d = c.dirL;
+  const R2 = RP * RP, RC2 = RC * RC;
+  for (let i = 0; i < N; i++) {
+    const k = i * 3, dx = P[k] - hx, dy = P[k + 1] - hy, dz = P[k + 2] - hz;
+    const r2 = dx * dx + dy * dy + dz * dz;
+    const along = dx * d.x + dy * d.y + dz * d.z;
+    const p2 = r2 - along * along;
+    if (r2 < R2 || p2 < RC2) { idx.push(i); anc.push(P[k], P[k + 1], P[k + 2]); rr.push(Math.sqrt(r2)); rp.push(Math.sqrt(Math.max(p2, 0))); }
+  }
+  c.idx = Int32Array.from(idx); c.anc = Float32Array.from(anc); c.rr = Float32Array.from(rr); c.rp = Float32Array.from(rp);
+}
+function pickPaint(c) {
+  // grab a colour from a *different* ingredient under the finger, so smears marble instead of muddying
+  const cand = [];
+  for (let j = 0; j < c.idx.length; j++) if (c.rp[j] < RC && PART[c.idx[j]] !== c.hitPart) cand.push(c.idx[j]);
+  let i = cand.length ? cand[(Math.random() * cand.length) | 0] : c.idx[(Math.random() * c.idx.length) | 0];
+  if (i === undefined) return;
+  if (mixed && PALETTE.length) { const p = PALETTE[(Math.random() * PALETTE.length) | 0]; c.paint = p.slice(); return; }
+  c.paint = [C[i * 3], C[i * 3 + 1], C[i * 3 + 2]];
+}
+function weights(c, j, out) {
+  const r = c.rr[j];
+  const t = r / RP; const wPull = t < 1 ? (1 - t * t) * (1 - t * t) : 0;
+  const wPress = Math.exp(-(r * r) / (RD * RD) * 2.2);
+  const q = r - RD * 1.15; const ring = Math.exp(-(q * q) / 0.012);
+  out[0] = wPull; out[1] = wPress; out[2] = ring; return out;
+}
+const _w = [0, 0, 0], _b = [0, 0, 0];
+function endContact(id) {
+  const c = contacts.get(id); if (!c) return;
+  contacts.delete(id);
+  settle(c.idx, j => { weights(c, j, _w); return Math.max(_w[0] * (c.delta.lengthSq() > 1e-4 ? 1 : 0.3), _w[1], _w[2] * 0.7); });
+}
+// plastic memory: part of the deformation stays, and the clay drifts toward a single lump
+function settle(idx, wfn) {
+  const plast = 0.3 + 0.3 * Math.min(mix / 0.8, 1) + (mixed ? 0.1 : 0);
+  const drift = 0.05 + 0.08 * Math.min(mix / 0.8, 1);
+  for (let j = 0; j < idx.length; j++) {
+    const w = wfn(j); if (w < 0.003) continue;
+    const i = idx[j], k = i * 3;
+    for (let a = 0; a < 3; a++) Q[k + a] += (P[k + a] - Q[k + a]) * plast * w;
+    blobTarget(i, _b);
+    for (let a = 0; a < 3; a++) Q[k + a] += (_b[a] - Q[k + a]) * drift * w;
+    let dx = Q[k] - R0[k], dy = Q[k + 1] - R0[k + 1], dz = Q[k + 2] - R0[k + 2];
+    const L = Math.hypot(dx, dy, dz);
+    if (L > 1.1) { const f = 1.1 / L; Q[k] = R0[k] + dx * f; Q[k + 1] = R0[k + 1] + dy * f; Q[k + 2] = R0[k + 2] + dz * f; }
+    T[i] += 0.012 * w;
+  }
+}
+const _pt = new THREE.Vector3(), _tmp = new THREE.Vector3();
+function updateContact(c, dt) {
+  setRay(c.x, c.y);
+  const pt = raycaster.ray.intersectPlane(c.plane, _pt);
+  let move = 0;
+  if (pt) {
+    const lp = toLocal(pt);
+    if (c.kind === 'poke') {
+      // a poking finger slides: re-seat the dent wherever it travels (kneading trail)
+      if (lp.distanceTo(c.hitL) > 0.16) {
+        const keep = c.depth * 0.55, paint = c.paint;
+        endContact(c.id);
+        const n = beginContact(c.id, c.x, c.y, 'poke');
+        if (n) { n.depth = keep; n.paint = paint; }
+        return;
+      }
+    } else {
+      _tmp.copy(lp).sub(c.hitL);
+      if (_tmp.length() > 1.15) _tmp.setLength(1.15);
+      move = _tmp.distanceTo(c.delta);
+      c.delta.lerp(_tmp, Math.min(1, dt * 22));
+    }
+  }
+  const still = move < 0.004;
+  const pullAmt = c.delta.length();
+  const dentMax = 0.24 * Math.max(0, 1 - pullAmt / 0.35);
+  c.depth += ((still ? dentMax : c.depth * 0.98) - c.depth) * Math.min(1, dt * (still ? 3 : 1));
+  // deform
+  const d = c.dirL, D = c.delta, dep = c.depth;
+  for (let j = 0; j < c.idx.length; j++) {
+    weights(c, j, _w);
+    const bw = Math.min(1, Math.max(_w[0], _w[1] * (dep > 0.01 ? 1 : 0), _w[2] * (dep > 0.01 ? 0.8 : 0)));
+    if (bw < 0.002) continue;
+    const i = c.idx[j], k = i * 3, ax = c.anc[j * 3], ay = c.anc[j * 3 + 1], az = c.anc[j * 3 + 2];
+    let rx = ax - c.hitL.x, ry = ay - c.hitL.y, rz = az - c.hitL.z;
+    const al = rx * d.x + ry * d.y + rz * d.z; rx -= d.x * al; ry -= d.y * al; rz -= d.z * al;
+    const rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
+    const pw = dep * _w[1], rw = dep * 0.5 * _w[2];
+    const tx = ax + D.x * _w[0] + d.x * pw + rx * rw;
+    const ty = ay + D.y * _w[0] + d.y * pw + ry * rw;
+    const tz = az + D.z * _w[0] + d.z * pw + rz * rw;
+    P[k] += (tx - P[k]) * bw; P[k + 1] += (ty - P[k + 1]) * bw; P[k + 2] += (tz - P[k + 2]) * bw;
+    V[k] *= 1 - bw; V[k + 1] *= 1 - bw; V[k + 2] *= 1 - bw;
+  }
+  // colour smearing (marbled streaks along the motion)
+  const amt = dt * 0.55 + move * 3.2;
+  c.paintT += dt + move * 4;
+  if (c.paintT > 0.7) { c.paintT = 0; pickPaint(c); }
+  if (D.lengthSq() > 1e-4) { c.stripe.crossVectors(D, d).normalize(); if (!isFinite(c.stripe.x)) c.stripe.set(1, 0, 0); }
+  smear(c.idx, c.anc, c.rp, RC, c.paint, amt, c.stripe, c.phase);
+  dirtyColor = true;
+}
+function smear(idx, anc, rp, rad, paint, amt, stripe, phase, tGain = 0.32) {
+  if (amt <= 0) return;
+  let sr = 0, sg = 0, sb = 0, sw = 0;
+  const rad2 = rad * rad;
+  for (let j = 0; j < idx.length; j++) {
+    const r = rp[j]; if (r > rad) continue;
+    const i = idx[j], k = i * 3;
+    const wc = Math.exp(-(r * r) / rad2 * 1.6);
+    const st = 0.5 + 0.5 * Math.sin((anc[j * 3] * stripe.x + anc[j * 3 + 1] * stripe.y + anc[j * 3 + 2] * stripe.z) * 26 + phase);
+    const a = Math.min(0.6, amt * wc * (0.25 + st * st * 1.5));
+    sr += C[k] * wc; sg += C[k + 1] * wc; sb += C[k + 2] * wc; sw += wc;
+    C[k] += (paint[0] - C[k]) * a; C[k + 1] += (paint[1] - C[k + 1]) * a; C[k + 2] += (paint[2] - C[k + 2]) * a;
+    if (a > 0.004) keepPretty(i);
+    T[i] += a * tGain;
+  }
+  if (sw > 0) { const u = Math.min(0.25, amt * 0.6); paint[0] += (sr / sw - paint[0]) * u; paint[1] += (sg / sw - paint[1]) * u; paint[2] += (sb / sw - paint[2]) * u; vivid(paint, 0.4); }
+}
+
+/* ---------- squeeze (two fingers / two hands / wheel) ---------- */
+function startSqueeze(ax, ay, bx, by, owner) {
+  if (!N) return;
+  endSqueeze();
+  camera.getWorldDirection(camDir);
+  const mx = (ax + bx) / 2, my = (ay + by) / 2;
+  const d0 = Math.max(24, Math.hypot(bx - ax, by - ay));
+  const hit = hitModel(mx, my);
+  const center = hit ? toLocal(hit.point) : (() => {
+    setRay(mx, my);
+    const pl = new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, root.getWorldPosition(new THREE.Vector3()));
+    const p = raycaster.ray.intersectPlane(pl, new THREE.Vector3()) || new THREE.Vector3(); return toLocal(p);
+  })();
+  if (hit) { // aim at the middle of the body, not the skin
+    const dl = raycaster.ray.direction.clone().transformDirection(rootInv); center.addScaledVector(dl, 0.25);
+  }
+  const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+  const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+  const axisW = right.multiplyScalar(bx - ax).add(up.multiplyScalar(-(by - ay))).normalize();
+  const axis = axisW.transformDirection(rootInv);
+  const dist = camera.position.distanceTo(root.position);
+  const worldPerPx = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * dist / innerHeight;
+  const sigma = Math.max(0.5, d0 * worldPerPx * 0.55);
+  const idx = [], anc = [], ww = [], rp = [];
+  const s2 = 2 * sigma * sigma;
+  for (let i = 0; i < N; i++) {
+    const k = i * 3, dx = P[k] - center.x, dy = P[k + 1] - center.y, dz = P[k + 2] - center.z;
+    const w = Math.exp(-(dx * dx + dy * dy + dz * dz) / s2);
+    if (w > 0.02) { idx.push(i); anc.push(P[k], P[k + 1], P[k + 2]); ww.push(w); const al = dx * axis.x + dy * axis.y + dz * axis.z; rp.push(Math.abs(al)); }
+  }
+  const stripe = axis.clone();
+  squeeze = { owner, d0, k: 1, kT: 1, center, axis, idx: Int32Array.from(idx), anc: Float32Array.from(anc), w: Float32Array.from(ww), rp: Float32Array.from(rp), paint: [0, 0, 0], paintT: 1, stripe, phase: Math.random() * 6 };
+  squeezePaint();
+  touchedOnce = true; fadeHint();
+}
+function squeezePaint() {
+  const s = squeeze; if (!s || !s.idx.length) return;
+  if (mixed && PALETTE.length) { s.paint = PALETTE[(Math.random() * PALETTE.length) | 0].slice(); return; }
+  const i = s.idx[(Math.random() * s.idx.length) | 0]; s.paint = [C[i * 3], C[i * 3 + 1], C[i * 3 + 2]];
+}
+function updateSqueeze(dt) {
+  const s = squeeze; if (!s) return;
+  const prev = s.k;
+  s.k += (s.kT - s.k) * Math.min(1, dt * 16);
+  const k = s.k, inv = 1 / Math.sqrt(k) - 1, ax = s.axis, c = s.center;
+  for (let j = 0; j < s.idx.length; j++) {
+    const i = s.idx[j], q = i * 3, w = s.w[j];
+    const x = s.anc[j * 3] - c.x, y = s.anc[j * 3 + 1] - c.y, z = s.anc[j * 3 + 2] - c.z;
+    const al = x * ax.x + y * ax.y + z * ax.z;
+    const px = x - ax.x * al, py = y - ax.y * al, pz = z - ax.z * al;
+    const tx = s.anc[j * 3] + (ax.x * al * (k - 1) + px * inv) * w;
+    const ty = s.anc[j * 3 + 1] + (ax.y * al * (k - 1) + py * inv) * w;
+    const tz = s.anc[j * 3 + 2] + (ax.z * al * (k - 1) + pz * inv) * w;
+    const bw = Math.min(1, w * 1.6);
+    P[q] += (tx - P[q]) * bw; P[q + 1] += (ty - P[q + 1]) * bw; P[q + 2] += (tz - P[q + 2]) * bw;
+    V[q] *= 1 - bw; V[q + 1] *= 1 - bw; V[q + 2] *= 1 - bw;
+  }
+  const move = Math.abs(k - prev);
+  s.paintT += dt + move * 3; if (s.paintT > 0.6) { s.paintT = 0; squeezePaint(); }
+  smear(s.idx, s.anc, s.rp, 0.35, s.paint, move * 2.2 + dt * 0.12, s.stripe, s.phase, 0.1);
+  dirtyColor = true;
+}
+function setSqueezeSpan(ax, ay, bx, by) {
+  if (!squeeze) return;
+  squeeze.kT = THREE.MathUtils.clamp(Math.hypot(bx - ax, by - ay) / squeeze.d0, 0.42, 1.9);
+}
+function endSqueeze() {
+  const s = squeeze; if (!s) return;
+  squeeze = null;
+  settle(s.idx, j => s.w[j] * Math.min(1, Math.abs(s.k - 1) * 3 + 0.2));
+}
+
+/* ---------- pointer / touch / mouse ---------- */
+const pointers = new Map();
+let rotVel = { x: 0, y: 0 };
+function touchPointers() { return [...pointers.values()].filter(p => p.type !== 'mouse'); }
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  canvas.setPointerCapture?.(e.pointerId);
+  const p = { id: e.pointerId, x: e.clientX, y: e.clientY, type: e.pointerType, mode: 'none' };
+  pointers.set(e.pointerId, p);
+  const tps = touchPointers();
+  if (e.pointerType !== 'mouse' && tps.length >= 2) {
+    // two fingers: squeeze / stretch
+    tps.forEach(t => { if (t.mode === 'contact') endContact('p' + t.id); t.mode = 'squeeze'; });
+    const [a, b] = tps; startSqueeze(a.x, a.y, b.x, b.y, 'touch');
+    return;
+  }
+  if (e.button === 2) { p.mode = 'rotate'; return; }
+  const c = beginContact('p' + e.pointerId, e.clientX, e.clientY, 'pull');
+  p.mode = c ? 'contact' : 'rotate';
+}, { passive: false });
+canvas.addEventListener('pointermove', e => {
+  const p = pointers.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  if (p.mode === 'rotate') { rotVel.y = dx * 0.008; rotVel.x = dy * 0.006; root.rotation.y += dx * 0.008; root.rotation.x = THREE.MathUtils.clamp(root.rotation.x + dy * 0.006, -0.6, 1.2); }
+  else if (p.mode === 'contact') { const c = contacts.get('p' + p.id); if (c) { c.x = p.x; c.y = p.y; } }
+  else if (p.mode === 'squeeze' && squeeze && squeeze.owner === 'touch') {
+    const tps = touchPointers().filter(t => t.mode === 'squeeze');
+    if (tps.length >= 2) setSqueezeSpan(tps[0].x, tps[0].y, tps[1].x, tps[1].y);
+  }
+}, { passive: true });
+function pointerEnd(e) {
+  const p = pointers.get(e.pointerId); if (!p) return;
+  pointers.delete(e.pointerId);
+  if (p.mode === 'contact') endContact('p' + p.id);
+  if (p.mode === 'squeeze') {
+    if (squeeze && squeeze.owner === 'touch') endSqueeze();
+    touchPointers().forEach(t => { if (t.mode === 'squeeze') t.mode = 'none'; });
+  }
+}
+canvas.addEventListener('pointerup', pointerEnd);
+canvas.addEventListener('pointercancel', pointerEnd);
+canvas.addEventListener('lostpointercapture', pointerEnd);
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+// mouse wheel: squeeze from both sides (scroll down) or stretch (scroll up)
+let wheelTimer = 0;
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (!squeeze || squeeze.owner !== 'wheel') {
+    const x = e.clientX, y = e.clientY, span = 220;
+    startSqueeze(x - span / 2, y, x + span / 2, y, 'wheel');
+    if (!squeeze) return;
+  }
+  squeeze.kT = THREE.MathUtils.clamp(squeeze.kT * Math.exp(-e.deltaY * 0.0016), 0.42, 1.9);
+  clearTimeout(wheelTimer);
+  wheelTimer = setTimeout(() => { if (squeeze && squeeze.owner === 'wheel') endSqueeze(); }, 380);
+}, { passive: false });
+// block page zoom / scroll gestures on iOS
+['gesturestart', 'gesturechange', 'gestureend'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+document.addEventListener('touchmove', e => { if (e.target === canvas) e.preventDefault(); }, { passive: false });
+let lastTouchEnd = 0;
+document.addEventListener('touchend', e => { const n = Date.now(); if (n - lastTouchEnd < 320 && e.target === canvas) e.preventDefault(); lastTouchEnd = n; }, { passive: false });
+
+/* ---------- hand tracking (MediaPipe Tasks Vision, runs locally in the browser) ---------- */
+const video = $('video'), lmCanvas = $('lm'), lmCtx = lmCanvas.getContext('2d');
+let landmarker = null, stream = null, handsOn = false, lastVideoTime = -1, lastDetect = 0, detectBusy = false;
+const detectInterval = isMobile ? 70 : 33;
+const hands = {}; // keyed by handedness
+const cursors = [$('cur0'), $('cur1')];
+
+async function loadLandmarker() {
+  if (landmarker) return landmarker;
+  const vision = await import('./vendor/mediapipe/vision_bundle.mjs');
+  const files = await vision.FilesetResolver.forVisionTasks(new URL('./vendor/mediapipe/wasm', location.href).href);
+  const opts = d => ({
+    baseOptions: { modelAssetPath: new URL('./models/hand_landmarker.task', location.href).href, delegate: d },
+    runningMode: 'VIDEO', numHands: 2, minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5, minTrackingConfidence: 0.5
+  });
+  try { landmarker = await vision.HandLandmarker.createFromOptions(files, opts('GPU')); }
+  catch (e) { console.warn('GPU delegate failed, using CPU', e); landmarker = await vision.HandLandmarker.createFromOptions(files, opts('CPU')); }
+  return landmarker;
+}
+async function startHands() {
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    toast('카메라는 HTTPS 주소에서만 켤 수 있어요. 터치와 마우스로는 계속 놀 수 있어요.'); return;
+  }
+  $('handLbl').textContent = '켜는 중…';
+  try {
+    const lmP = loadLandmarker();
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: 'user', width: { ideal: isMobile ? 480 : 640 }, height: { ideal: isMobile ? 360 : 480 }, frameRate: { ideal: 30, max: 30 } }
+    });
+    video.srcObject = stream;
+    await video.play().catch(() => {});
+    $('cam').hidden = false; $('cam').classList.remove('collapsed'); $('camToggle').textContent = '미리보기 숨기기';
+    await lmP;
+    handsOn = true; $('handBtn').classList.add('on'); $('handLbl').textContent = '손 인식 끄기';
+    $('camTag').textContent = '손을 보여 주세요';
+    showHint();
+  } catch (e) {
+    console.error(e);
+    stopHands();
+    const msg = e && e.name === 'NotAllowedError' ? '카메라 권한이 막혀 있어요. 브라우저 설정에서 카메라를 허용해 주세요.'
+      : e && e.name === 'NotFoundError' ? '사용할 수 있는 카메라를 찾지 못했어요.'
+      : '손 인식을 시작하지 못했어요. 터치와 마우스로는 계속 놀 수 있어요.';
+    toast(msg);
+  }
+}
+function stopHands() {
+  handsOn = false;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null; video.srcObject = null;
+  $('cam').hidden = true; $('handBtn').classList.remove('on'); $('handLbl').textContent = '손 인식';
+  for (const k in hands) releaseHand(hands[k]);
+  if (squeeze && squeeze.owner === 'hands') endSqueeze();
+  cursors.forEach(c => c.hidden = true);
+  showHint();
+}
+$('handBtn').addEventListener('click', () => handsOn || stream ? stopHands() : startHands());
+$('camToggle').addEventListener('click', () => {
+  const cam = $('cam'); const col = cam.classList.toggle('collapsed');
+  $('camToggle').textContent = col ? '미리보기 보기' : '미리보기 숨기기';
+});
+if (isMobile && Math.min(innerWidth, innerHeight) < 360) {} // tiny screens: preview starts expanded but can be collapsed
+
+function mapToScreen(lx, ly) {
+  // mirrored; a little gain so the edges are easy to reach
+  const x = ((1 - lx) - 0.5) * 1.3 + 0.5, y = (ly - 0.5) * 1.3 + 0.5;
+  return [x * innerWidth, y * innerHeight];
+}
+function dist2d(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function analyseHand(lm, h) {
+  const size = dist2d(lm[0], lm[9]) || 0.1;
+  const pinchR = dist2d(lm[4], lm[8]) / size;
+  h.pinch = h.pinch ? pinchR < 0.5 : pinchR < 0.32;
+  const ext = (tip, pip) => dist2d(lm[tip], lm[0]) > dist2d(lm[pip], lm[0]) * 1.12;
+  h.poke = !h.pinch && ext(8, 6) && !ext(12, 10) && !ext(16, 14);
+  const src = h.pinch ? { x: (lm[4].x + lm[8].x) / 2, y: (lm[4].y + lm[8].y) / 2 } : lm[8];
+  const [sx, sy] = mapToScreen(src.x, src.y);
+  if (!h.seen) { h.x = sx; h.y = sy; }
+  h.tx = sx; h.ty = sy; h.seen = performance.now();
+}
+function releaseHand(h) {
+  if (h.contact) { endContact(h.contact); h.contact = null; }
+  h.pinch = h.poke = false;
+}
+function detectHands(now) {
+  if (!handsOn || !landmarker || detectBusy) return;
+  if (now - lastDetect < detectInterval || video.readyState < 2 || video.currentTime === lastVideoTime) return;
+  lastDetect = now; lastVideoTime = video.currentTime;
+  detectBusy = true;
+  let res;
+  try { res = landmarker.detectForVideo(video, now); } catch (e) { console.warn(e); detectBusy = false; return; }
+  detectBusy = false;
+  const seenKeys = new Set();
+  const w = lmCanvas.clientWidth, hgt = lmCanvas.clientHeight;
+  const drawing = !$('cam').classList.contains('collapsed');
+  if (drawing) { if (lmCanvas.width !== w * 2) { lmCanvas.width = w * 2; lmCanvas.height = hgt * 2; } lmCtx.clearRect(0, 0, lmCanvas.width, lmCanvas.height); }
+  (res.landmarks || []).forEach((lm, n) => {
+    const keyName = res.handedness?.[n]?.[0]?.categoryName || ('h' + n);
+    let key = keyName; if (seenKeys.has(key)) key += n;
+    seenKeys.add(key);
+    const h = hands[key] || (hands[key] = { key, pinch: false, poke: false, contact: null, slot: Object.keys(hands).length % 2 });
+    analyseHand(lm, h);
+    if (drawing) {
+      // object-fit:cover mapping for the preview overlay
+      const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+      const sc = Math.max(lmCanvas.width / vw, lmCanvas.height / vh), ox = (lmCanvas.width - vw * sc) / 2, oy = (lmCanvas.height - vh * sc) / 2;
+      lmCtx.fillStyle = h.pinch ? 'rgba(255,138,122,.95)' : h.poke ? 'rgba(142,219,183,.95)' : 'rgba(255,255,255,.85)';
+      lm.forEach((p, idx) => { const r = (idx === 4 || idx === 8) ? 5 : 3; lmCtx.beginPath(); lmCtx.arc(ox + p.x * vw * sc, oy + p.y * vh * sc, r, 0, 6.283); lmCtx.fill(); });
+    }
+  });
+  for (const k in hands) if (!seenKeys.has(k)) { releaseHand(hands[k]); hands[k].seen = 0; }
+  $('camTag').textContent = seenKeys.size ? (seenKeys.size > 1 ? '두 손 인식 중' : '손 인식 중') : '손을 보여 주세요';
+}
+function updateHands(dt) {
+  if (!handsOn) return;
+  const live = Object.values(hands).filter(h => h.seen);
+  live.forEach(h => { const f = Math.min(1, dt * 14); h.x += (h.tx - h.x) * f; h.y += (h.ty - h.y) * f; });
+  cursors.forEach((c, i) => {
+    const h = live[i];
+    if (!h) { c.hidden = true; return; }
+    c.hidden = false; c.style.transform = `translate(${h.x}px,${h.y}px)`;
+    c.classList.toggle('pinch', h.pinch); c.classList.toggle('poke', h.poke);
+  });
+  const pinching = live.filter(h => h.pinch);
+  if (pinching.length >= 2) {
+    const [a, b] = pinching;
+    if (!squeeze || squeeze.owner !== 'hands') {
+      live.forEach(h => { if (h.contact) { endContact(h.contact); h.contact = null; } });
+      startSqueeze(a.x, a.y, b.x, b.y, 'hands');
+    } else setSqueezeSpan(a.x, a.y, b.x, b.y);
+    return;
+  } else if (squeeze && squeeze.owner === 'hands') endSqueeze();
+  const now = performance.now();
+  live.forEach(h => {
+    const want = h.pinch ? 'pull' : h.poke ? 'poke' : null;
+    const cur = h.contact ? contacts.get(h.contact) : null;
+    if (cur && (!want || cur.kind !== want)) { endContact(h.contact); h.contact = null; }
+    if (want && !h.contact) {
+      if (h.retry && now < h.retry) return;
+      const id = 'h' + h.key;
+      if (beginContact(id, h.x, h.y, want)) h.contact = id; else h.retry = now + 140;
+    }
+    if (h.contact) { const c = contacts.get(h.contact); if (c) { c.x = h.x; c.y = h.y; } else h.contact = null; }
+  });
+}
+
+/* ---------- reset ---------- */
+$('resetBtn').addEventListener('click', () => {
+  contacts.forEach((c, id) => contacts.delete(id));
+  for (const k in hands) hands[k].contact = null;
+  squeeze = null;
+  Q.set(R0); T.fill(0);
+  restoring = 1; restoreT0 = performance.now(); restoreFrom = C.slice();
+  mixed = false; finale = null; mix = 0;
+  $('resetBtn').hidden = true; updateMeter();
+});
+let restoreFrom = null, restoreT0 = 0;
+
+/* ---------- UI bits ---------- */
+let hintTimer = 0;
+function showHint() {
+  const h = $('hint');
+  h.textContent = handsOn ? '검지로 콕 · 엄지+검지로 집어 쭈욱 · 두 손으로 집으면 꾹'
+    : isTouch ? '한 손가락으로 꾹·쭈욱 · 두 손가락으로 집기·벌리기 · 빈 곳은 돌리기'
+    : '클릭해서 꾹 · 끌어서 쭈욱 · 휠로 양옆에서 꾹 · 빈 곳 드래그로 돌리기';
+  h.classList.remove('fade'); clearTimeout(hintTimer);
+  hintTimer = setTimeout(fadeHint, 7000);
+}
+function fadeHint() { if (touchedOnce) $('hint').classList.add('fade'); }
+let toastTimer = 0;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; t.style.opacity = 1; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.style.opacity = 0; setTimeout(() => t.hidden = true, 400); }, 4200); }
+function updateMeter() {
+  const pct = mixed ? 100 : Math.min(99, Math.round(mix / 0.8 * 100));
+  $('mixFill').style.width = pct + '%';
+  $('mixTxt').textContent = mixed ? '완전히 섞였어요' : `섞임 ${pct}%`;
+  $('sub').textContent = mixed ? '마블 클레이 완성! 계속 주물러도 돼요' : pct > 50 ? '조금만 더 주물러 볼까요' : '꾹 누르고 쭈욱 늘려 보세요';
+}
+
+/* ---------- finale: one marbled lump ---------- */
+function startFinale() {
+  const tc = new Float32Array(N * 3), tq = new Float32Array(N * 3), seed = Math.random() * 10;
+  for (let i = 0; i < N; i++) {
+    const k = i * 3, m = marbleAt(R0[k] * 1.7, R0[k + 1] * 1.7, R0[k + 2] * 1.7, seed);
+    const u = 0.5 + 0.4 * (1 - Math.min(T[i], 1));
+    tc[k] = C[k] + (m[0] - C[k]) * u; tc[k + 1] = C[k + 1] + (m[1] - C[k + 1]) * u; tc[k + 2] = C[k + 2] + (m[2] - C[k + 2]) * u;
+    blobTarget(i, _b);
+    for (let a = 0; a < 3; a++) tq[k + a] = Q[k + a] + (_b[a] - Q[k + a]) * 0.72;
+  }
+  finale = { t0: performance.now(), t: 0, fc: C.slice(), fq: Q.slice(), tc, tq };
+}
+
+/* ---------- main loop ---------- */
+let last = performance.now(), dirtyColor = false, frame = 0, slowTime = 0, mixTimer = 0, normalsTick = 0;
+function physics(dt) {
+  const k = 120, damp = 9;
+  let energy = 0;
+  for (let q = 0; q < N * 3; q++) {
+    const d = Q[q] - P[q];
+    V[q] += (d * k - V[q] * damp) * dt;
+    P[q] += V[q] * dt;
+    energy += Math.abs(V[q]) + Math.abs(d);
+  }
+  return energy / (N * 3);
+}
+let resting = false;
+// typed-array normal rebuild (much cheaper than computeVertexNormals on every frame)
+function fastNormals(g) {
+  const pos = g.attributes.position.array, nor = g.attributes.normal.array, idx = g.index ? g.index.array : null;
+  nor.fill(0);
+  const tc = idx ? idx.length : pos.length / 3;
+  for (let f = 0; f < tc; f += 3) {
+    const a = (idx ? idx[f] : f) * 3, b = (idx ? idx[f + 1] : f + 1) * 3, c = (idx ? idx[f + 2] : f + 2) * 3;
+    const e1x = pos[b] - pos[a], e1y = pos[b + 1] - pos[a + 1], e1z = pos[b + 2] - pos[a + 2];
+    const e2x = pos[c] - pos[a], e2y = pos[c + 1] - pos[a + 1], e2z = pos[c + 2] - pos[a + 2];
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+    nor[a] += nx; nor[a + 1] += ny; nor[a + 2] += nz;
+    nor[b] += nx; nor[b + 1] += ny; nor[b + 2] += nz;
+    nor[c] += nx; nor[c + 1] += ny; nor[c + 2] += nz;
+  }
+  for (let i = 0; i < nor.length; i += 3) {
+    const l = Math.hypot(nor[i], nor[i + 1], nor[i + 2]) || 1;
+    nor[i] /= l; nor[i + 1] /= l; nor[i + 2] /= l;
+  }
+  g.attributes.normal.needsUpdate = true;
+}
+function tick(now) {
+  requestAnimationFrame(tick);
+  const rawDt = (now - last) / 1000; last = now;
+  const dt = Math.min(rawDt, 1 / 30);
+  frame++;
+  // adaptive quality
+  if (rawDt > 0.03) slowTime += rawDt; else slowTime = Math.max(0, slowTime - rawDt * 0.5);
+  if (slowTime > 2 && pixelRatio > 1) { pixelRatio = Math.max(1, pixelRatio - 0.25); renderer.setPixelRatio(pixelRatio); onResize(); slowTime = 0; }
+
+  const _t0 = performance.now();
+  detectHands(now);
+  if (!N) { renderer.render(scene, camera); return; }
+  root.updateMatrixWorld(); rootInv.copy(root.matrixWorld).invert();
+  updateHands(dt);
+
+  // inertia for view rotation
+  if (![...pointers.values()].some(p => p.mode === 'rotate')) {
+    root.rotation.y += rotVel.y; root.rotation.x = THREE.MathUtils.clamp(root.rotation.x + rotVel.x, -0.6, 1.2);
+    rotVel.y *= 0.92; rotVel.x *= 0.92;
+  }
+
+  const active = contacts.size > 0 || squeeze || finale || restoring > 0;
+  let e = 1;
+  if (active || !resting) {
+    const sub = rawDt > 1 / 45 ? 2 : 1;
+    for (let s = 0; s < sub; s++) e = physics(dt / sub);
+    for (const c of [...contacts.values()]) updateContact(c, dt);
+    updateSqueeze(dt);
+    resting = !active && e < 2e-5;
+    if (finale) {
+      finale.t = Math.min(1, (performance.now() - finale.t0) / 1600);
+      const u = finale.t * finale.t * (3 - 2 * finale.t);
+      for (let q = 0; q < N * 3; q++) { C[q] = finale.fc[q] + (finale.tc[q] - finale.fc[q]) * u; Q[q] = finale.fq[q] + (finale.tq[q] - finale.fq[q]) * u; }
+      dirtyColor = true;
+      if (finale.t >= 1) finale = null;
+    }
+    if (restoring > 0) {
+      restoring = Math.max(0, 1 - (performance.now() - restoreT0) / 800);
+      const u = 1 - restoring, s = u * u * (3 - 2 * u);
+      for (let q = 0; q < N * 3; q++) C[q] = restoreFrom[q] + (C0[q] - restoreFrom[q]) * s;
+      dirtyColor = true;
+    }
+    for (const m of meshes) m.geometry.attributes.position.needsUpdate = true;
+    normalsTick++;
+    const stride = isMobile && !resting ? 2 : 1;
+    for (let mi = 0; mi < meshes.length; mi++) if (stride === 1 || (mi + normalsTick) % 2 === 0) fastNormals(meshes[mi].geometry);
+  }
+  if (dirtyColor) { for (const m of meshes) m.geometry.attributes.color.needsUpdate = true; dirtyColor = false; }
+
+  mixTimer += dt;
+  if (mixTimer > 0.25) {
+    mixTimer = 0;
+    let s = 0; for (let i = 0; i < N; i++) s += T[i] < 1 ? T[i] : 1;
+    mix = s / N;
+    if (!mixed && mix >= 0.8) { mixed = true; startFinale(); $('resetBtn').hidden = false; }
+    updateMeter();
+  }
+  window.__jsms = performance.now() - _t0;
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(tick);
+if (location.hash === '#selftest') window.__mixAll = () => { T.fill(1); };
+document.addEventListener('visibilitychange', () => { last = performance.now(); });
+</script>
+</body>
+</html>
