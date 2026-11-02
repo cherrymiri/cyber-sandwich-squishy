@@ -843,7 +843,6 @@ function tick(now) {
   renderer.render(scene, camera);
 }
 requestAnimationFrame(tick);
-if (location.hash === '#selftest') window.__mixAll = () => { T.fill(1); };
 document.addEventListener('visibilitychange', () => { last = performance.now(); });
 </script>
 </body>
